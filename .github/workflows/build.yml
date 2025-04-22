@@ -1,0 +1,61 @@
+name: Docker Build and Release SysMonBot
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform:
+          - linux-amd64
+          - windows-amd64
+          - darwin-amd64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Parse Matrix Variables
+        id: vars
+        run: |
+          PLAT="${{ matrix.platform }}"
+          echo "GOOS=${PLAT%%-*}" >> $GITHUB_ENV
+          echo "GOARCH=${PLAT##*-}" >> $GITHUB_ENV
+
+      - name: Build with Docker (client)
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app \
+            -e GOOS=${{ env.GOOS }} -e GOARCH=${{ env.GOARCH }} \
+            golang:alpine sh -c "\
+              cd client && \
+              go build -o ../build/sysmon_client-${{ env.GOOS }}-${{ env.GOARCH }}"
+
+      - name: Build with Docker (server)
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app \
+            -e GOOS=${{ env.GOOS }} -e GOARCH=${{ env.GOARCH }} \
+            golang:alpine sh -c "\
+              cd server && \
+              go build -o ../build/sysmon_server-${{ env.GOOS }}-${{ env.GOARCH }}"
+
+      - name: Zip artifacts
+        run: |
+          mkdir -p release
+          cd build
+          zip ../release/sysmon_client-${{ env.GOOS }}-${{ env.GOARCH }}.zip sysmon_client-*
+          zip ../release/sysmon_server-${{ env.GOOS }}-${{ env.GOARCH }}.zip sysmon_server-*
+          cd ..
+
+      - name: Upload release artifacts
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            release/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
