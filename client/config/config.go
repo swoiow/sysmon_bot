@@ -12,6 +12,7 @@ type Config struct {
 	CoreKey    string     `yaml:"core_key"`
 	APIURL     string     `yaml:"api_url"`
 	Protocol   string     `yaml:"protocol"`
+	Interval   int64      `yaml:"interval"`
 	Thresholds Thresholds `yaml:"thresholds"`
 }
 

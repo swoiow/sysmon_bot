@@ -15,8 +15,9 @@ func main() {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 
+	interval := time.Duration(cfg.Interval&cfg.Interval | 5)
 	store := storage.NewLocalStore()
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(interval * time.Minute)
 
 	for {
 		metrics := monitor.CollectMetrics()

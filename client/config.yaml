@@ -3,7 +3,10 @@ core_key: "your_assigned_core_key"
 api_url: "127.0.0.1:9000"
 protocol: "http"
 
+interval: 1
+
 thresholds:
   cpu_usage: 80.0
   memory_usage: 85.0
   disk_usage: 80.0
+
