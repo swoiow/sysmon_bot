@@ -2,32 +2,38 @@ package alert
 
 import (
 	"bytes"
-	"client/config"
-	"client/monitor"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
+
+	"client/config"
+	"client/monitor"
 )
 
-type AlertMessage struct {
-	APIKey string          `json:"api_key"`
-	Type   string          `json:"type"` // "cpu" / "memory" / "disk"
-	Value  monitor.Metrics `json:"value"`
-}
-
 func SendAlert(cfg *config.Config, metrics monitor.Metrics) {
-	msg := AlertMessage{
-		APIKey: cfg.APIKey,
-		Type:   "threshold_exceeded",
-		Value:  metrics,
+	ts := time.Now().Unix()
+	sign := md5Hex(cfg.APIKey + strconv.FormatInt(ts, 10) + cfg.CoreKey)
+
+	msg := map[string]interface{}{
+		"api_key":   cfg.APIKey,
+		"timestamp": ts,
+		"sign":      sign,
+		"cpu":       metrics.CPU,
+		"memory":    metrics.Memory,
+		"disk":      metrics.Disk,
 	}
+
 	payload, _ := json.Marshal(msg)
 
 	switch strings.ToLower(cfg.Protocol) {
 	case "http":
-		http.Post(cfg.APIURL, "application/json", bytes.NewBuffer(payload))
+		http.Post("http://"+cfg.APIURL, "application/json", bytes.NewBuffer(payload))
 
 	case "udp":
 		conn, err := net.Dial("udp", cfg.APIURL)
@@ -46,4 +52,9 @@ func SendAlert(cfg *config.Config, metrics monitor.Metrics) {
 	default:
 		fmt.Println("未知协议:", cfg.Protocol)
 	}
+}
+
+func md5Hex(s string) string {
+	h := md5.Sum([]byte(s))
+	return hex.EncodeToString(h[:])
 }

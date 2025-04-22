@@ -1,4 +1,5 @@
-api_key: "YOUR_SECRET_KEY"
+api_key: "your_generated_api_key"
+core_key: "your_assigned_core_key"
 api_url: "127.0.0.1:9000"
 protocol: "http"
 

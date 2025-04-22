@@ -9,8 +9,9 @@ import (
 
 type Config struct {
 	APIKey     string     `yaml:"api_key"`
+	CoreKey    string     `yaml:"core_key"`
 	APIURL     string     `yaml:"api_url"`
-	Protocol   string     `yaml:"protocol"` // "udp", "http", "tcp"
+	Protocol   string     `yaml:"protocol"`
 	Thresholds Thresholds `yaml:"thresholds"`
 }
 

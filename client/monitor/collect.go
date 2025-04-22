@@ -8,9 +8,9 @@ import (
 )
 
 type Metrics struct {
-	CPU    float64 // in percent
-	Memory float64 // in percent
-	Disk   float64 // in percent
+	CPU    float64
+	Memory float64
+	Disk   float64
 }
 
 func CollectMetrics() Metrics {

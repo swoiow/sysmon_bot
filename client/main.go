@@ -1,4 +1,4 @@
-package client
+package main
 
 import (
 	"client/alert"
@@ -20,10 +20,9 @@ func main() {
 
 	for {
 		metrics := monitor.CollectMetrics()
-
 		store.Append(metrics)
-
 		avg := store.AverageLastHour()
+
 		log.Printf("当前值: CPU: %.2f%% Mem: %.2f%% Disk: %.2f%%", metrics.CPU, metrics.Memory, metrics.Disk)
 		log.Printf("过去1小时平均: CPU: %.2f%% Mem: %.2f%% Disk: %.2f%%", avg.CPU, avg.Memory, avg.Disk)
 
