@@ -14,7 +14,7 @@ jobs:
         platform:
           - linux-amd64
           - windows-amd64
-          - darwin-amd64
+#          - darwin-amd64
 
     steps:
       - name: Checkout code
@@ -49,11 +49,18 @@ jobs:
         run: |
           mkdir -p release
           cd build
-          zip ../release/sysmon_client-${{ env.GOOS }}-${{ env.GOARCH }}.zip sysmon_client-*
-          zip ../release/sysmon_server-${{ env.GOOS }}-${{ env.GOARCH }}.zip sysmon_server-*
+          zip -r9 ../release/sysmon_client-${{ env.GOOS }}-${{ env.GOARCH }}.zip sysmon_client-*
+          zip -r9 ../release/sysmon_server-${{ env.GOOS }}-${{ env.GOARCH }}.zip sysmon_server-*
           cd ..
 
-      - name: Upload release artifacts
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sysmonbot-${{ matrix.platform }}
+          path: release/*.zip
+          retention-days: 3
+
+      - name: Release artifacts
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
