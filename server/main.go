@@ -1,13 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
 	"crypto/rand"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"bytes"
 	"io"
 	"log"
 	"net"
@@ -21,6 +21,8 @@ import (
 
 //go:embed index.html
 var indexHtml []byte
+
+// -------------------- 数据结构 --------------------
 
 type DeviceInfo struct {
 	IP       string `json:"ip"`
@@ -53,30 +55,26 @@ type ServerConfig struct {
 }
 var serverConfig ServerConfig
 
-func loadServerConfig() {
-	paths := []string{"./server_config.yaml", "/etc/sysmon_bot/server_config.yaml"}
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err == nil {
-			yaml.Unmarshal(data, &serverConfig)
-			return
-		}
-	}
-}
-
 const stateFile = "server_state.json"
 const maxAge = 60
+
+// -------------------- 主入口 --------------------
 
 func main() {
 	loadServerConfig()
 	loadStateFromDisk()
+
+	log.Println("🌐 Starting server...")
 	go persistLoop()
+
 	go startHTTP(":9000")
 	go startUDP(":9001")
 	go startTCP(":9002")
 
 	select {}
 }
+
+// -------------------- 状态持久化 --------------------
 
 func persistLoop() {
 	for {
@@ -91,36 +89,51 @@ func persistStateToDisk() {
 	f, _ := os.Create(stateFile)
 	defer f.Close()
 	json.NewEncoder(f).Encode(state)
+	log.Println("🔒 状态已保存到磁盘")
 }
 
 func loadStateFromDisk() {
 	f, err := os.Open(stateFile)
 	if err != nil {
+		log.Println("⚠️ 无法加载状态文件:", err)
 		return
 	}
 	defer f.Close()
 	json.NewDecoder(f).Decode(&state)
+	log.Println("🔄 状态已从磁盘加载")
 }
 
-// ----------------- HTTP -----------------
+func loadServerConfig() {
+	data, err := os.ReadFile("server_config.yaml")
+	if err != nil {
+		log.Println("⚠️ 无法加载 webhook 配置:", err)
+		return
+	}
+	yaml.Unmarshal(data, &serverConfig)
+	log.Println("🔧 Webhook 配置已加载")
+}
+
+// -------------------- HTTP 服务 --------------------
 
 func startHTTP(addr string) {
 	http.HandleFunc("/", serveIndex)
 	http.HandleFunc("/api/status", getStatus)
 	http.HandleFunc("/api/key", handleKeyCreate)
 	http.HandleFunc("/api/key/", handleKeyDelete)
-	log.Println("🌐 HTTP listening on", addr)
+	log.Println("🌐 HTTP 监听中，端口:", addr)
 	http.ListenAndServe(addr, nil)
 }
 
 func serveIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.Write(indexHtml)
+	log.Println("🔗 访问了 /")
 }
 
 func getStatus(w http.ResponseWriter, r *http.Request) {
 	state.RLock()
 	defer state.RUnlock()
+	log.Println("🔍 获取状态信息")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(state)
 }
@@ -135,6 +148,8 @@ func handleKeyCreate(w http.ResponseWriter, r *http.Request) {
 	state.Devices[apiKey] = DeviceInfo{IP: "-", LastSeen: now}
 	state.Unlock()
 
+	log.Printf("✅ 创建了新API Key: %s", apiKey)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"api_key":  apiKey,
@@ -148,61 +163,15 @@ func handleKeyDelete(w http.ResponseWriter, r *http.Request) {
 	delete(state.Keys, key)
 	delete(state.Devices, key)
 	state.Unlock()
+	log.Printf("✅ 删除了API Key: %s", key)
 	w.WriteHeader(200)
 }
 
-// ----------------- 签名校验 -----------------
-
-func verifyRequest(data []byte) bool {
-	var m map[string]interface{}
-	if err := json.Unmarshal(data, &m); err != nil {
-		return false
-	}
-	apiKey, _ := m["api_key"].(string)
-	sign, _ := m["sign"].(string)
-	tsf, ok := m["timestamp"].(float64)
-	if !ok || apiKey == "" || sign == "" {
-		return false
-	}
-
-	ts := int64(tsf)
-	if abs(time.Now().Unix()-ts) > maxAge {
-		return false
-	}
-
-	state.RLock()
-	coreKey := state.Keys[apiKey]
-	state.RUnlock()
-
-	if coreKey == "" {
-		return false
-	}
-
-	expected := md5Hex(apiKey + fmt.Sprintf("%d", ts) + coreKey)
-	return strings.EqualFold(expected, sign)
-}
-
-func md5Hex(s string) string {
-	h := md5.Sum([]byte(s))
-	return hex.EncodeToString(h[:])
-}
-
-func abs(n int64) int64 {
-	if n < 0 {
-		return -n
-	}
-	return n
-}
-
-func generateSecureKey(length int) string {
-	b := make([]byte, length)
-	rand.Read(b)
-	return hex.EncodeToString(b)[:length]
-}
-
-// ----------------- 接收处理 -----------------
+// -------------------- 数据接收 --------------------
 
 func handlePacket(data []byte, ip string) {
+	log.Printf("🔄 接收到来自 %s 的数据: %s", ip, string(data))
+
 	if !verifyRequest(data) {
 		log.Println("❌ 签名校验失败")
 		return
@@ -225,9 +194,10 @@ func handlePacket(data []byte, ip string) {
 	}
 	state.Unlock()
 
+	log.Printf("✅ 已处理并记录日志，API Key: %s", apiKey)
+
 	go forwardToExternal(data)
 }
-
 
 func forwardToExternal(data []byte) {
 	if serverConfig.Webhook.URL == "" {
@@ -286,4 +256,52 @@ func startTCP(addr string) {
 			handlePacket(data, c.RemoteAddr().String())
 		}(conn)
 	}
+}
+
+// -------------------- 签名校验 --------------------
+
+func verifyRequest(data []byte) bool {
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		log.Println("❌ JSON 解码失败:", err)
+		return false
+	}
+	apiKey, _ := m["api_key"].(string)
+	sign, _ := m["sign"].(string)
+	tsf, ok := m["timestamp"].(float64)
+	if !ok || apiKey == "" || sign == "" {
+		log.Println("❌ 请求缺少必要字段")
+		return false
+	}
+
+	ts := int64(tsf)
+	if abs(time.Now().Unix()-ts) > maxAge {
+		log.Println("❌ 签名过期")
+		return false
+	}
+
+	state.RLock()
+	coreKey := state.Keys[apiKey]
+	state.RUnlock()
+
+	expected := md5Hex(apiKey + fmt.Sprintf("%d", ts) + coreKey)
+	return strings.EqualFold(expected, sign)
+}
+
+func md5Hex(s string) string {
+	h := md5.Sum([]byte(s))
+	return hex.EncodeToString(h[:])
+}
+
+func abs(n int64) int64 {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+func generateSecureKey(length int) string {
+	b := make([]byte, length)
+	rand.Read(b)
+	return hex.EncodeToString(b)[:length]
 }
