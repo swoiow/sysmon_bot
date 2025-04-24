@@ -142,7 +142,7 @@ func getStatus(w http.ResponseWriter, r *http.Request) {
 func handleKeyCreate(w http.ResponseWriter, r *http.Request) {
 	apiKey := "AK-" + generateSecureKey(22)
 	coreKey := generateSecureKey(20)
-	now := time.Now().Format("2025-04-23 00:34:24")
+	now := time.Now().Format("2006-01-02 15:04:05")
 
 	state.Lock()
 	state.Keys[apiKey] = coreKey
@@ -182,7 +182,7 @@ func handlePacket(data []byte, ip string) {
 	json.Unmarshal(data, &m)
 	apiKey := m["api_key"].(string)
 
-	now := time.Now().Format("2025-04-23 00:34:24")
+	now := time.Now().Format("2006-01-02 15:04:05")
 
 	state.Lock()
 	state.Devices[apiKey] = DeviceInfo{IP: ip, LastSeen: now}
