@@ -120,6 +120,7 @@ func startHTTP(addr string) {
 	http.HandleFunc("/api/status", getStatus)
 	http.HandleFunc("/api/key", handleKeyCreate)
 	http.HandleFunc("/api/key/", handleKeyDelete)
+	http.HandleFunc("/api/beat", handleBeat)
 	log.Println("🌐 HTTP 监听中，端口:", addr)
 	http.ListenAndServe(addr, nil)
 }
@@ -257,6 +258,26 @@ func startTCP(addr string) {
 		}(conn)
 	}
 }
+
+func handleBeat(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read body", http.StatusInternalServerError)
+		return
+	}
+	defer r.Body.Close()
+
+	log.Printf("🔔 收到 HTTP POST 报文: %s", string(body))
+	handlePacket(body, r.RemoteAddr)
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
+}
+
 
 // -------------------- 签名校验 --------------------
 
