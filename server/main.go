@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"bytes"
 	"io"
 	"log"
 	"net"
