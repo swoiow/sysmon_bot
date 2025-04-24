@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed index.html
@@ -43,10 +44,30 @@ var state = ServerState{
 	Keys:    make(map[string]string),
 }
 
+type ServerConfig struct {
+	Webhook struct {
+		URL     string            `yaml:"url"`
+		Headers map[string]string `yaml:"headers"`
+	} `yaml:"webhook"`
+}
+var serverConfig ServerConfig
+
+func loadServerConfig() {
+	paths := []string{"./server_config.yaml", "/etc/sysmon_bot/server_config.yaml"}
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err == nil {
+			yaml.Unmarshal(data, &serverConfig)
+			return
+		}
+	}
+}
+
 const stateFile = "server_state.json"
 const maxAge = 60
 
 func main() {
+	loadServerConfig()
 	loadStateFromDisk()
 	go persistLoop()
 	go startHTTP(":9000")
@@ -206,8 +227,40 @@ func handlePacket(data []byte, ip string) {
 	go forwardToExternal(data)
 }
 
+
 func forwardToExternal(data []byte) {
-	fmt.Println("📤 Forward to external system (TODO):", string(data))
+	if serverConfig.Webhook.URL == "" {
+		log.Println("⚠️ 未配置 webhook.url，跳过外发")
+		return
+	}
+
+	// 构造 JSON payload
+	payloadMap := map[string]string{
+		"text": string(data),
+	}
+	payload, _ := json.Marshal(payloadMap)
+
+	// 构造 HTTP 请求
+	req, err := http.NewRequest("POST", serverConfig.Webhook.URL, bytes.NewBuffer(payload))
+	if err != nil {
+		log.Println("❌ 构建请求失败:", err)
+		return
+	}
+
+	for k, v := range serverConfig.Webhook.Headers {
+		req.Header.Set(k, v)
+	}
+
+	// 发送请求
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println("❌ webhook 发送失败:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	log.Printf("✅ Webhook 返回 %s", resp.Status)
 }
 
 func startUDP(addr string) {
