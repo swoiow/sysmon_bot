@@ -15,7 +15,10 @@ func main() {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 
-	interval := time.Duration(cfg.Interval&cfg.Interval | 5)
+	interval := time.Duration(5) // 默认值：5分钟
+	if cfg.Interval > 0 {
+	    interval = time.Duration(cfg.Interval)
+	}
 	store := storage.NewLocalStore()
 	ticker := time.NewTicker(interval * time.Minute)
 
