@@ -1,0 +1,5 @@
+webhook:
+  platform: lark
+  url: "https://open.feishu.cn/..."
+  headers:
+    Content-Type: "application/json"

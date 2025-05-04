@@ -8,15 +8,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
-	"gopkg.in/yaml.v3"
 )
 
 //go:embed index.html
@@ -49,10 +51,12 @@ var state = ServerState{
 
 type ServerConfig struct {
 	Webhook struct {
-		URL     string            `yaml:"url"`
-		Headers map[string]string `yaml:"headers"`
+		Platform string            `yaml:"platform"`
+		URL      string            `yaml:"url"`
+		Headers  map[string]string `yaml:"headers"`
 	} `yaml:"webhook"`
 }
+
 var serverConfig ServerConfig
 
 const stateFile = "server_state.json"
@@ -61,6 +65,8 @@ const maxAge = 60
 // -------------------- 主入口 --------------------
 
 func main() {
+	log.Printf("Program: %s, Version: %s, (%s)", __NAME__, __VERSION__, __AUTHOR__)
+
 	loadServerConfig()
 	loadStateFromDisk()
 
@@ -75,6 +81,14 @@ func main() {
 }
 
 // -------------------- 状态持久化 --------------------
+func getDefaultServerConfigPath() string {
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join(os.Getenv("ProgramData"), "SysMonBot", "server_config.yaml")
+	default: // Linux, macOS
+		return "/etc/sysmon_bot/server_config.yaml"
+	}
+}
 
 func persistLoop() {
 	for {
@@ -104,13 +118,17 @@ func loadStateFromDisk() {
 }
 
 func loadServerConfig() {
-	data, err := os.ReadFile("server_config.yaml")
+	path := getDefaultServerConfigPath()
+	data, err := os.ReadFile(path)
 	if err != nil {
-		log.Println("⚠️ 无法加载 webhook 配置:", err)
+		log.Printf("⚠️ 无法加载配置 %s: %v", path, err)
 		return
 	}
-	yaml.Unmarshal(data, &serverConfig)
-	log.Println("🔧 Webhook 配置已加载")
+	if err := yaml.Unmarshal(data, &serverConfig); err != nil {
+		log.Printf("❌ 配置解析失败: %v", err)
+		return
+	}
+	log.Printf("✅ 加载 server_config.yaml 成功: %s", path)
 }
 
 // -------------------- HTTP 服务 --------------------
@@ -120,7 +138,7 @@ func startHTTP(addr string) {
 	http.HandleFunc("/api/status", getStatus)
 	http.HandleFunc("/api/key", handleKeyCreate)
 	http.HandleFunc("/api/key/", handleKeyDelete)
-	http.HandleFunc("/api/beat", handleBeat)
+	http.HandleFunc("/api/report", handleBeat)
 	log.Println("🌐 HTTP 监听中，端口:", addr)
 	http.ListenAndServe(addr, nil)
 }
@@ -128,7 +146,6 @@ func startHTTP(addr string) {
 func serveIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.Write(indexHtml)
-	log.Println("🔗 访问了 /")
 }
 
 func getStatus(w http.ResponseWriter, r *http.Request) {
@@ -206,13 +223,26 @@ func forwardToExternal(data []byte) {
 		return
 	}
 
-	// 构造 JSON payload
-	payloadMap := map[string]string{
-		"text": string(data),
-	}
-	payload, _ := json.Marshal(payloadMap)
+	var payload []byte
+	var err error
 
-	// 构造 HTTP 请求
+	switch strings.ToLower(serverConfig.Webhook.Platform) {
+	case "lark":
+		payload, err = buildLarkPayload(data)
+	case "dingtalk":
+		payload, err = buildDingTalkPayload(data)
+	case "wechat":
+		payload, err = buildWeComPayload(data)
+	default:
+		// 通用默认结构
+		payload, err = json.Marshal(map[string]string{"text": string(data)})
+	}
+
+	if err != nil {
+		log.Println("❌ 构造 webhook payload 失败:", err)
+		return
+	}
+
 	req, err := http.NewRequest("POST", serverConfig.Webhook.URL, bytes.NewBuffer(payload))
 	if err != nil {
 		log.Println("❌ 构建请求失败:", err)
@@ -223,7 +253,6 @@ func forwardToExternal(data []byte) {
 		req.Header.Set(k, v)
 	}
 
-	// 发送请求
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -239,7 +268,7 @@ func startUDP(addr string) {
 	udpAddr, _ := net.ResolveUDPAddr("udp", addr)
 	conn, _ := net.ListenUDP("udp", udpAddr)
 	log.Println("📡 UDP listening on", addr)
-	buf := make([]byte, 4096)
+	buf := make([]byte, 8192)
 	for {
 		n, addr, _ := conn.ReadFromUDP(buf)
 		handlePacket(buf[:n], addr.String())
@@ -277,7 +306,6 @@ func handleBeat(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
 }
-
 
 // -------------------- 签名校验 --------------------
 
