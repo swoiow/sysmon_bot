@@ -1,0 +1,17 @@
+[Unit]
+Description=SysMonBot Client Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sysmon_client
+Restart=always
+RestartSec=5
+User=root
+
+# 日志持久化到 journalctl
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
