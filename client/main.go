@@ -17,7 +17,7 @@ func main() {
 
 	interval := time.Duration(5) // 默认值：5分钟
 	if cfg.Interval > 0 {
-	    interval = time.Duration(cfg.Interval)
+		interval = time.Duration(cfg.Interval)
 	}
 	store := storage.NewLocalStore()
 	ticker := time.NewTicker(interval * time.Minute)
