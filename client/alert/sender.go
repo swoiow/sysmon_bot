@@ -26,7 +26,7 @@ func SendAlert(cfg *config.Config, metrics monitor.Metrics) {
 		"sign":      sign,
 		"cpu":       metrics.CPU,
 		"memory":    metrics.Memory,
-		"disk":      metrics.Disk,
+		"disks":     metrics.Disks, // ✅ 改为详细挂载点结构
 	}
 
 	payload, _ := json.Marshal(msg)

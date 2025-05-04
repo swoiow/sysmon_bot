@@ -5,26 +5,45 @@ import (
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
 	"log"
+	"math"
 )
 
 type Metrics struct {
-	CPU    float64
-	Memory float64
-	Disk   float64
+	CPU    float64            `json:"cpu"`
+	Memory float64            `json:"memory"`
+	Disks  map[string]float64 `json:"disks"` // key = mountpoint, value = usage%
 }
 
 func CollectMetrics() Metrics {
 	cpuPercent, _ := cpu.Percent(0, false)
 	memStat, _ := mem.VirtualMemory()
-	diskStat, _ := disk.Usage("/")
+
+	partitions, _ := disk.Partitions(true)
+	diskUsages := make(map[string]float64)
+
+	for _, p := range partitions {
+		usage, err := disk.Usage(p.Mountpoint)
+		if err != nil || usage.Total == 0 {
+			continue
+		}
+
+		// 按设备名记录（而非挂载点）
+		//diskUsages[p.Device] = round(usage.UsedPercent)
+		// 按挂载点记录（而非设备名）
+		diskUsages[p.Mountpoint] = round(usage.UsedPercent)
+	}
 
 	if len(cpuPercent) == 0 {
 		log.Println("未能获取CPU信息")
 	}
 
 	return Metrics{
-		CPU:    cpuPercent[0],
-		Memory: memStat.UsedPercent,
-		Disk:   diskStat.UsedPercent,
+		CPU:    round(cpuPercent[0]),
+		Memory: round(memStat.UsedPercent),
+		Disks:  diskUsages,
 	}
+}
+
+func round(val float64) float64 {
+	return math.Round(val*100000) / 100000
 }

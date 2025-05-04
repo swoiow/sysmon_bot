@@ -26,14 +26,17 @@ func (s *LocalStore) Append(m monitor.Metrics) {
 
 func (s *LocalStore) AverageLastHour() monitor.Metrics {
 	now := time.Now()
-	var sum monitor.Metrics
-	var count int
+	var sumCPU, sumMem float64
+	diskSums := make(map[string]float64)
+	count := 0
 
 	for _, dp := range s.data {
 		if now.Sub(dp.TS) <= time.Hour {
-			sum.CPU += dp.Metrics.CPU
-			sum.Memory += dp.Metrics.Memory
-			sum.Disk += dp.Metrics.Disk
+			sumCPU += dp.Metrics.CPU
+			sumMem += dp.Metrics.Memory
+			for mount, usage := range dp.Metrics.Disks {
+				diskSums[mount] += usage
+			}
 			count++
 		}
 	}
@@ -42,10 +45,15 @@ func (s *LocalStore) AverageLastHour() monitor.Metrics {
 		return monitor.Metrics{}
 	}
 
+	avgDisks := make(map[string]float64)
+	for mount, total := range diskSums {
+		avgDisks[mount] = total / float64(count)
+	}
+
 	return monitor.Metrics{
-		CPU:    sum.CPU / float64(count),
-		Memory: sum.Memory / float64(count),
-		Disk:   sum.Disk / float64(count),
+		CPU:    sumCPU / float64(count),
+		Memory: sumMem / float64(count),
+		Disks:  avgDisks,
 	}
 }
 

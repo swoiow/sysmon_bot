@@ -27,13 +27,20 @@ func main() {
 		store.Append(metrics)
 		avg := store.AverageLastHour()
 
-		log.Printf("当前值: CPU: %.2f%% Mem: %.2f%% Disk: %.2f%%", metrics.CPU, metrics.Memory, metrics.Disk)
-		log.Printf("过去1小时平均: CPU: %.2f%% Mem: %.2f%% Disk: %.2f%%", avg.CPU, avg.Memory, avg.Disk)
+		log.Printf("当前值: CPU: %.2f%% Mem: %.2f%%", metrics.CPU, metrics.Memory)
+		log.Printf("过去1小时平均: CPU: %.2f%% Mem: %.2f%%", avg.CPU, avg.Memory)
 
-		if avg.CPU > cfg.Thresholds.CPUUsage ||
-			avg.Memory > cfg.Thresholds.MemoryUsage ||
-			avg.Disk > cfg.Thresholds.DiskUsage {
+		trigger := avg.CPU > cfg.Thresholds.CPUUsage ||
+			avg.Memory > cfg.Thresholds.MemoryUsage
 
+		for mount, usage := range avg.Disks {
+			log.Printf("挂载点 [%s] 平均磁盘使用率: %.5f%%", mount, usage)
+			if usage > cfg.Thresholds.DiskUsage {
+				trigger = true
+			}
+		}
+
+		if trigger {
 			alert.SendAlert(cfg, avg)
 		}
 
