@@ -47,12 +47,12 @@ func (s *LocalStore) AverageLastHour() monitor.Metrics {
 
 	avgDisks := make(map[string]float64)
 	for mount, total := range diskSums {
-		avgDisks[mount] = total / float64(count)
+		avgDisks[mount] = monitor.Round(total / float64(count))
 	}
 
 	return monitor.Metrics{
-		CPU:    sumCPU / float64(count),
-		Memory: sumMem / float64(count),
+		CPU:    monitor.Round(sumCPU / float64(count)),
+		Memory: monitor.Round(sumMem / float64(count)),
 		Disks:  avgDisks,
 	}
 }

@@ -28,9 +28,9 @@ func CollectMetrics() Metrics {
 		}
 
 		// 按设备名记录（而非挂载点）
-		//diskUsages[p.Device] = round(usage.UsedPercent)
+		//diskUsages[p.Device] = Round(usage.UsedPercent)
 		// 按挂载点记录（而非设备名）
-		diskUsages[p.Mountpoint] = round(usage.UsedPercent)
+		diskUsages[p.Mountpoint] = Round(usage.UsedPercent)
 	}
 
 	if len(cpuPercent) == 0 {
@@ -38,12 +38,12 @@ func CollectMetrics() Metrics {
 	}
 
 	return Metrics{
-		CPU:    round(cpuPercent[0]),
-		Memory: round(memStat.UsedPercent),
+		CPU:    Round(cpuPercent[0]),
+		Memory: Round(memStat.UsedPercent),
 		Disks:  diskUsages,
 	}
 }
 
-func round(val float64) float64 {
+func Round(val float64) float64 {
 	return math.Round(val*100000) / 100000
 }
