@@ -24,6 +24,9 @@ import (
 //go:embed index.html
 var indexHtml []byte
 
+//go:embed assets/*
+var embeddedAssets embed.FS
+
 // -------------------- 数据结构 --------------------
 
 type DeviceInfo struct {
@@ -139,6 +142,10 @@ func startHTTP(addr string) {
 	http.HandleFunc("/api/key", handleKeyCreate)
 	http.HandleFunc("/api/key/", handleKeyDelete)
 	http.HandleFunc("/api/report", handleBeat)
+
+	// 嵌入的静态资源服务
+	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(embeddedAssets))))
+
 	log.Println("🌐 HTTP 监听中，端口:", addr)
 	http.ListenAndServe(addr, nil)
 }
