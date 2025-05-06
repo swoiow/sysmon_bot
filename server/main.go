@@ -147,11 +147,17 @@ func startHTTP(addr string) {
 	http.HandleFunc("/api/key/", handleKeyDelete)
 	http.HandleFunc("/api/report", handleBeat)
 
-	// 嵌入的静态资源服务
-	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(embeddedAssets))))
+	// 嵌入静态资源（修复双 assets 路径问题）
+	assetsFS, err := fs.Sub(embeddedAssets, "assets")
+	if err != nil {
+		log.Fatalf("❌ 嵌入资源子路径失败: %v", err)
+	}
+	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(assetsFS))))
 
 	log.Println("🌐 HTTP 监听中，端口:", addr)
-	http.ListenAndServe(addr, nil)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Fatalf("❌ HTTP 服务启动失败: %v", err)
+	}
 }
 
 func serveIndex(w http.ResponseWriter, r *http.Request) {
