@@ -66,6 +66,9 @@ const stateFile = "server_state.json"
 const maxAge = 60
 
 // -------------------- 主入口 --------------------
+func init() {
+	mime.AddExtensionType(".js", "application/javascript")
+}
 
 func main() {
 	log.Printf("Program: %s, Version: %s, (%s)", __NAME__, __VERSION__, __AUTHOR__)
