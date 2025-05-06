@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"crypto/rand"
-	_ "embed"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
