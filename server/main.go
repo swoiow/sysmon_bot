@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mime"
 	"bytes"
 	"crypto/md5"
 	"crypto/rand"
