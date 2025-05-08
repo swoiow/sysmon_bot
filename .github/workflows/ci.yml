@@ -96,3 +96,5 @@ jobs:
           append_body: false
           files: |
             release/sysmonbot-*/**/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
