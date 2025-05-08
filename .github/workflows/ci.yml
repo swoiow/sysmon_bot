@@ -1,5 +1,9 @@
 name: Build and Release
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     tags:
@@ -14,23 +18,21 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        platform:
-          - linux-amd64
-          - windows-amd64
-#          - darwin-amd64
+        platform: [linux-amd64, windows-amd64]
+      fail-fast: false
 
     steps:
-      - name: Checkout code
+      - name: 🧾 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Parse Matrix Variables
+      - name: 🔧 Parse platform
         id: vars
         run: |
           PLAT="${{ matrix.platform }}"
           echo "GOOS=${PLAT%%-*}" >> $GITHUB_ENV
           echo "GOARCH=${PLAT##*-}" >> $GITHUB_ENV
 
-      - name: Build with Docker (client)
+      - name: 🛠️ Build client binary
         run: |
           docker run --rm -v ${{ github.workspace }}:/app -w /app \
             -e GOOS=${{ env.GOOS }} -e GOARCH=${{ env.GOARCH }} \
@@ -39,7 +41,7 @@ jobs:
               go mod tidy && \
               go build -ldflags='-s -w' -o ../build/sysmon_client-${{ env.GOOS }}-${{ env.GOARCH }}"
 
-      - name: Build with Docker (server)
+      - name: 🛠️ Build server binary
         run: |
           docker run --rm -v ${{ github.workspace }}:/app -w /app \
             -e GOOS=${{ env.GOOS }} -e GOARCH=${{ env.GOARCH }} \
@@ -48,7 +50,7 @@ jobs:
               go mod tidy && \
               go build -ldflags='-s -w' -o ../build/sysmon_server-${{ env.GOOS }}-${{ env.GOARCH }}"
 
-      - name: Zip artifacts
+      - name: 📦 Zip artifacts
         run: |
           mkdir -p release
           cd build
@@ -56,7 +58,7 @@ jobs:
           zip -r9 ../release/sysmon_server-${{ env.GOOS }}-${{ env.GOARCH }}.zip sysmon_server-*
           cd ..
 
-      - name: Upload artifacts
+      - name: 🚀 Upload zipped artifacts
         uses: actions/upload-artifact@v4
         with:
           name: sysmonbot-${{ matrix.platform }}
@@ -68,22 +70,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: 🧾 Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Download all wheels
+      - name: 📥 Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: release
 
-      - name: Generate release body
+      - name: 📝 Generate release notes
         run: |
           git log -1 --pretty=format:'- %h %s%n%b' > release_body.md
           echo "Release body written to release_body.md"
 
-      - name: Release artifacts
+      - name: 🚀 Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ secrets.CUSTOM_GITHUB_TOKEN  }}
+          token: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
           tag_name: latest
           name: latest
           draft: false
@@ -92,6 +95,4 @@ jobs:
           body_path: release_body.md
           append_body: false
           files: |
-            release/sysmonbot-*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            release/sysmonbot-*/**/*.zip
